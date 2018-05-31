@@ -3,6 +3,8 @@ import bs4
 import re
 import timeit
 import utils
+from lxml.html import fromstring
+from scrapy.selector import Selector
 
 
 class BaseCrawler(object):
@@ -51,6 +53,39 @@ class DummyBs4Crawler(BaseCrawler):
                 results.append(pattern)
         return results
 
+class DummyLxmlCrawler(BaseCrawler):
+    def get_extra_info_patterns(self) -> dict:
+        return {
+            'title': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/h1/text()'),
+            'postingDate': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/div[2]/text()'),
+            'postingUser': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/div[1]/a/text()'),
+            'postingUserUrl': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/div[1]/a/@href'),
+        }
+
+    def extract(self):
+        results = []
+        for key, pattern in self.get_extra_info_patterns().items():
+            if pattern:
+                results.append(pattern)
+        return results
+
+class DummyScrapyCrawler(BaseCrawler):
+    def get_extra_info_patterns(self) -> dict:
+        return {
+            'title': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/h1/text()').extract(),
+            'postingDate': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/div[2]/text()').extract(),
+            'postingUser': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/div[1]/a/text()').extract(),
+            'postingUserUrl': self.page.xpath('/html/body/div[3]/div/div[2]/div[8]/div/div/div[1]/a/@href').extract(),
+        }
+
+    def extract(self):
+        results = []
+        for key, pattern in self.get_extra_info_patterns().items():
+            if pattern:
+                results.append(pattern)
+        return results
+
+
 
 def performance_test(crawler):
     results = crawler.extract()
@@ -68,7 +103,15 @@ if __name__ == '__main__':
     soup = bs4.BeautifulSoup(some_page, 'lxml')
     bs4_crawler = DummyBs4Crawler(soup)
 
+    tree = fromstring(some_page)
+    lxml_crawler = DummyLxmlCrawler(tree)
+
+    scrapy_parser = Selector(text=some_page)
+    scrapy_crawler = DummyScrapyCrawler(scrapy_parser)
+
     print(timeit.timeit('performance_test(regex_crawler)', number=100, globals=globals()))
     print(timeit.timeit('performance_test(bs4_crawler)', number=100, globals=globals()))
+    print(timeit.timeit('performance_test(lxml_crawler)', number=100, globals=globals()))
+    print(timeit.timeit('performance_test(scrapy_crawler)', number=100, globals=globals()))
 
     assert performance_test(regex_crawler) == performance_test(bs4_crawler)
